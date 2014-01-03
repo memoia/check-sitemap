@@ -1,0 +1,53 @@
+#!env/bin/python
+#
+import logging
+import argparse
+import requests
+from lxml import etree
+
+
+logging.basicConfig()
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
+
+def args():
+    parser = argparse.ArgumentParser(description='Check a sitemap.xml has valid urls')
+    parser.add_argument('path', metavar='URL', type=str, nargs='?',
+                        help='Path to sitemap.xml')
+    parser.add_argument('--ignore',
+                        metavar='HTTP_CODE',
+                        action='append',
+                        dest='ignore_codes',
+                        default=['200', '301', '302'],
+                        help='Ignore HTTP error codes')
+
+    return parser.parse_args()
+
+
+def valid(path):
+    log.debug('Checking {}'.format(path))
+    return str(requests.head(path).status_code) in OPTS.ignore_codes
+
+
+def urls(xml_data):
+    tree = etree.XML(xml_data)
+    ns = {'n': tree.nsmap[None]}
+    return [x.text for x in tree.xpath('//n:url/n:loc', namespaces=ns)]
+
+
+def test_sitemap_path_exists():
+    assert valid(OPTS.path), 'No sitemap'
+
+
+def test_sitemap_contains_proper_locations():
+    sitemap_data = requests.get(OPTS.path)
+    for url in urls(sitemap_data.content):
+        assert valid(url), '{} is bad'.format(url)
+
+
+if __name__ == '__main__':
+    OPTS = args()
+    assert OPTS.path, 'Path to sitemap.xml required'
+    test_sitemap_path_exists()
+    test_sitemap_contains_proper_locations()
